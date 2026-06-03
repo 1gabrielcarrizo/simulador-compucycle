@@ -1,0 +1,14 @@
+.App {
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  padding: 0;
+  background: #f4f4f4;
+}
+
+main.container-fluid {
+  max-width: 1200px;
+}
+
+.dashboard-row {
+  align-items: flex-start;
+}

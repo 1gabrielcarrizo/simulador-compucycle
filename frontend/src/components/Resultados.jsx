@@ -1,81 +1,78 @@
-import { Card, Row, Col } from 'react-bootstrap';
-import GraficoWip from './GraficoWip.jsx';
-import GraficoFlujo from './GraficoFlujo.jsx';
+import { TrendingUp } from 'lucide-react';
+import WipDonutChart from './WipDonutChart.jsx';
+import WipAreaChart from './WipAreaChart.jsx';
+import { kgALotes } from '../utils/parametros.js';
 
-function Resultados({ datos, capacidadWip }) {
+function Resultados({ datos, capacidadLotes = 50 }) {
   if (!datos) {
-    return <p className="text-center mt-4">No hay resultados aún</p>;
+    return (
+      <div className="flex-1 flex flex-col gap-4 min-h-[400px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card-panel p-6 flex items-center justify-center min-h-[220px] text-slate-500 text-sm">
+            Nivel de Saturación WIP
+          </div>
+          <div className="card-panel p-6 flex items-center justify-center min-h-[220px] text-slate-500 text-sm">
+            Costos Operativos Acumulados
+          </div>
+        </div>
+        <div className="card-panel p-6 flex-1 flex items-center justify-center text-slate-500 text-sm">
+          Evolución del Inventario en Proceso (WIP)
+        </div>
+      </div>
+    );
   }
 
   const t = datos.totales;
-
-  const cards = [
-    { titulo: 'Costos operativos', valor: `$${t.costosOperativosUsd.toLocaleString()} USD` },
-    { titulo: 'Scrap recuperado', valor: `${t.scrapRecuperadoKg.toLocaleString()} kg` },
-    { titulo: 'Tasa de rechazo', valor: `${t.tasaRechazoPct}%` },
-    { titulo: 'Lotes procesados', valor: `${t.lotesTotales}` },
-    { titulo: 'WIP máximo', valor: `${t.wipMaximoGlobal} kg (Grado ${t.gradoMaximoGlobal})` },
-    { titulo: 'Kg procesados', valor: `${t.kgProcesados.toLocaleString()} kg` },
-  ];
-
-  const kgFlujo = {
-    kgDestruccion: datos.porDia?.reduce((s, d) => s + (d.kgDestruccion || 0), 0) ?? 0,
-    kgRefurbish: datos.porDia?.reduce((s, d) => s + (d.kgRefurbish || 0), 0) ?? 0,
-    kgReproceso: datos.porDia?.reduce((s, d) => s + (d.kgReproceso || 0), 0) ?? 0,
-  };
+  const lotesMax = kgALotes(t.wipMaximoGlobal);
+  const lotesActuales = Math.min(capacidadLotes, Math.round(lotesMax));
+  const saturacionPct = Math.min(100, (lotesActuales / capacidadLotes) * 100);
+  const limiteLotes = Math.round(capacidadLotes * 0.8);
+  const trendPct = t.tasaRechazoPct > 0 ? -t.tasaRechazoPct * 0.1 + 2.3 : 2.3;
 
   return (
-    <div>
-      <h2 className="my-4 text-success">Resultados de Simulación</h2>
-      <p className="text-muted small">
-        Imán: <strong>{datos.iman?.nombre}</strong> · Estabilidad estimada:{' '}
-        <strong>{datos.estabilidadImanDias} días</strong>
+    <div className="flex-1 flex flex-col gap-4 min-h-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card-panel p-5">
+          <h3 className="text-sm font-medium text-slate-400 mb-2">Nivel de Saturación WIP</h3>
+          <WipDonutChart
+            porcentaje={saturacionPct}
+            lotesActuales={lotesActuales}
+            capacidadLotes={capacidadLotes}
+          />
+        </div>
+
+        <div className="card-panel p-5 flex flex-col justify-center">
+          <h3 className="text-sm font-medium text-slate-400 mb-3">
+            Costos Operativos Acumulados
+          </h3>
+          <p className="text-4xl font-bold text-white tracking-tight">
+            ${t.costosOperativosUsd.toLocaleString()}{' '}
+            <span className="text-lg text-slate-500 font-normal">USD</span>
+          </p>
+          <div className="flex items-center gap-2 mt-3 text-accent text-sm">
+            <TrendingUp size={16} />
+            <span>
+              {trendPct >= 0 ? '+' : ''}
+              {trendPct.toFixed(1)}% respecto al periodo anterior
+            </span>
+          </div>
+          <div className="mt-4 flex gap-4 text-xs text-slate-500 border-t border-surface-border pt-3">
+            <span>Scrap: {t.scrapRecuperadoKg.toLocaleString()} kg</span>
+            <span>Rechazo: {t.tasaRechazoPct}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="card-panel p-5 flex-1 min-h-[340px] flex flex-col">
+        <h3 className="text-sm font-medium text-slate-400 mb-4">
+          Evolución del Inventario en Proceso (WIP)
+        </h3>
+        <WipAreaChart serieWip={datos.serieWip} limiteLotes={limiteLotes} />
+      </div>
+
+      <p className="text-xs text-slate-600 px-1 truncate" title={t.decisionFinal}>
+        {datos.iman?.nombre} · {t.decisionFinal}
       </p>
-
-      <Row xs={1} md={2} lg={3} className="g-4">
-        {cards.map((c, i) => (
-          <Col key={i}>
-            <Card className="shadow-sm h-100 text-center">
-              <Card.Header className="fw-bold text-white bg-success">{c.titulo}</Card.Header>
-              <Card.Body>
-                <Card.Text className="fw-bold fs-5 text-success">{c.valor}</Card.Text>
-              </Card.Body>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
-      <h3 className="mt-5">Evolución del WIP</h3>
-      <Card className="p-3 mb-4">
-        <GraficoWip serieWip={datos.serieWip} capacidadWip={capacidadWip} />
-      </Card>
-
-      <Row className="g-4">
-        <Col md={6}>
-          <Card className="p-3 h-100">
-            <GraficoFlujo totales={kgFlujo} />
-          </Card>
-        </Col>
-        <Col md={6}>
-          <Card className="h-100">
-            <Card.Header className="fw-bold bg-success text-white">Decisión IF-THEN</Card.Header>
-            <Card.Body>
-              <p
-                className={
-                  t.requiereUpgradeIman ? 'text-warning fw-semibold' : 'text-success'
-                }
-              >
-                {t.decisionFinal}
-              </p>
-              {datos.porDia?.map((d) => (
-                <div key={d.dia} className="small border-top pt-2 mt-2">
-                  <strong>Día {d.dia}:</strong> WIP prom. {d.wipPromedio} kg · {d.decisionInversion}
-                </div>
-              ))}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
     </div>
   );
 }

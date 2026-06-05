@@ -1,101 +1,87 @@
-import { useState, useEffect, useRef } from 'react';
-import Swal from 'sweetalert2';
-import Header from './components/Header.jsx';
-import Sidebar from './components/Sidebar.jsx';
-import Resultados from './components/Resultados.jsx';
-import { ejecutarSimulacion } from './api/simulacionApi.js';
-import { DEFAULT_PARAMS, uiToApiParams } from './utils/parametros.js';
+import { useState } from 'react';
+import ConfigPanel from './components/ConfigPanel.jsx';
+import PlantMonitor from './components/PlantMonitor.jsx';
+import SemaphorePanel from './components/SemaphorePanel.jsx';
+import EventLogPanel from './components/EventLogPanel.jsx';
+import ReportModal from './components/ReportModal.jsx';
+import { iniciarJornada } from './api/simulacionApi.js';
+import { usePlayback } from './hooks/usePlayback.js';
 
 function App() {
-  const [params, setParams] = useState(DEFAULT_PARAMS);
-  const [resultados, setResultados] = useState(null);
   const [cargando, setCargando] = useState(false);
-  const [tiempoSeg, setTiempoSeg] = useState(0);
-  const timerRef = useRef(null);
+  const [reproduciendo, setReproduciendo] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [error, setError] = useState(null);
+  const [mostrarModal, setMostrarModal] = useState(false);
 
-  useEffect(() => {
-    if (cargando) {
-      const t0 = Date.now();
-      timerRef.current = setInterval(() => {
-        setTiempoSeg(Math.floor((Date.now() - t0) / 1000));
-      }, 1000);
-    } else {
-      clearInterval(timerRef.current);
-      if (resultados) {
-        setTiempoSeg(8 * 60 * 60);
-      }
-    }
-    return () => clearInterval(timerRef.current);
-  }, [cargando, resultados]);
+  const { frame, tiempoMin, eventosVisibles, progresoPct } = usePlayback(
+    resultado,
+    reproduciendo,
+  );
 
-  const handleRun = async () => {
+  const handleIniciar = async () => {
     setCargando(true);
-    setResultados(null);
-    setTiempoSeg(0);
-
-    const apiParams = uiToApiParams(params);
+    setReproduciendo(false);
+    setResultado(null);
+    setError(null);
+    setMostrarModal(false);
 
     try {
-      const res = await ejecutarSimulacion(apiParams);
+      const res = await iniciarJornada();
       if (res.ok) {
-        setResultados(res.resultado);
-        Swal.fire({
-          icon: 'success',
-          title: 'Simulación completada',
-          text: `${res.resultado.totales.lotesTotales} lotes procesados`,
-          timer: 2000,
-          showConfirmButton: false,
-          background: '#1e293b',
-          color: '#e2e8f0',
-        });
+        setResultado(res.resultado);
+        setReproduciendo(true);
+        setTimeout(() => {
+          setReproduciendo(false);
+          setMostrarModal(true);
+        }, Math.max(3000, (res.resultado.logEventos?.length || 10) * 80));
       } else {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: res.msg || 'Error en el servidor',
-          background: '#1e293b',
-          color: '#e2e8f0',
-        });
+        setError(res.msg || 'Error en el servidor');
       }
     } catch (err) {
       console.error(err);
-      Swal.fire({
-        icon: 'error',
-        title: 'Sin conexión',
-        text: 'Verifique el backend en http://localhost:4000',
-        background: '#1e293b',
-        color: '#e2e8f0',
-      });
+      setError('No se pudo conectar al backend (http://localhost:4000)');
     } finally {
       setCargando(false);
     }
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-surface">
-      <Header ejecutando={cargando} tiempoSegundos={tiempoSeg} />
+    <div className="min-h-screen bg-slate-100">
+      <header className="bg-white border-b border-scada-border px-6 py-3 shadow-sm">
+        <h1 className="text-lg font-bold text-scada-blue">CompuCycle — Simulador ITAD</h1>
+        <p className="text-xs text-slate-500">Planta Houston · Gestión RAEE HDD/SSD · SCADA</p>
+      </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0 overflow-hidden">
-        <Sidebar
-          params={params}
-          onChange={setParams}
-          onRun={handleRun}
-          onReset={setParams}
-          disabled={cargando}
+      <main className="max-w-7xl mx-auto p-4 space-y-4">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-scada-red text-sm px-4 py-2 rounded-md">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-3">
+            <ConfigPanel onIniciar={handleIniciar} cargando={cargando || reproduciendo} />
+          </div>
+          <div className="lg:col-span-6">
+            <PlantMonitor frame={frame} />
+          </div>
+          <div className="lg:col-span-3">
+            <SemaphorePanel frame={frame} />
+          </div>
+        </div>
+
+        <EventLogPanel
+          tiempoMin={tiempoMin}
+          progresoPct={progresoPct}
+          eventos={eventosVisibles}
         />
+      </main>
 
-        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-y-auto">
-          {cargando && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/60 backdrop-blur-sm lg:static lg:bg-transparent lg:backdrop-blur-none lg:mb-4">
-              <div className="text-center">
-                <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="mt-3 text-slate-400 text-sm">Ejecutando eventos discretos…</p>
-              </div>
-            </div>
-          )}
-          <Resultados datos={resultados} capacidadLotes={params.capacidadLotes} />
-        </main>
-      </div>
+      {mostrarModal && resultado?.reporte && (
+        <ReportModal reporte={resultado.reporte} onCerrar={() => setMostrarModal(false)} />
+      )}
     </div>
   );
 }

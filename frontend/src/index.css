@@ -2,33 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  body {
-    @apply bg-surface text-slate-200 antialiased;
-  }
+body {
+  @apply bg-white text-slate-800 antialiased;
 }
 
 @layer components {
-  .card-panel {
-    @apply bg-surface-card border border-surface-border rounded-xl shadow-card;
+  .scada-card {
+    @apply bg-white border border-scada-border rounded-md shadow-sm;
   }
-
-  .slider-track {
-    @apply w-full h-1.5 rounded-full appearance-none cursor-pointer bg-slate-700;
+  .scada-section-title {
+    @apply text-xs font-bold text-scada-blue uppercase tracking-wide border-b border-scada-border pb-2 mb-3;
   }
-
-  .slider-track::-webkit-slider-thumb {
-    @apply appearance-none w-4 h-4 rounded-full bg-white shadow-md cursor-pointer;
-    margin-top: -6px;
-  }
-
-  .slider-track::-moz-range-thumb {
-    @apply w-4 h-4 rounded-full bg-white border-0 cursor-pointer;
-  }
-}
-
-/* SweetAlert2 dark theme hint */
-.swal2-popup {
-  background: #1e293b !important;
-  color: #e2e8f0 !important;
 }

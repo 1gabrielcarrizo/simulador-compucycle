@@ -4,19 +4,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: {
-          DEFAULT: '#0f172a',
-          card: '#1e293b',
-          border: '#334155',
+        scada: {
+          blue: '#1e40af',
+          green: '#16a34a',
+          red: '#dc2626',
+          orange: '#ea580c',
+          yellow: '#ca8a04',
+          panel: '#f8fafc',
+          border: '#cbd5e1',
         },
-        accent: {
-          DEFAULT: '#10b981',
-          dim: '#059669',
-          glow: '#34d399',
-        },
-      },
-      boxShadow: {
-        card: '0 4px 24px rgba(0, 0, 0, 0.35)',
       },
     },
   },

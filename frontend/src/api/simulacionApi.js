@@ -7,12 +7,7 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-export async function ejecutarSimulacion(params) {
-  const { data } = await api.post('/simulacion/run', { ...params, guardar: true });
-  return data;
-}
-
-export async function obtenerHistorial() {
-  const { data } = await api.get('/simulacion/historial');
+export async function iniciarJornada() {
+  const { data } = await api.post('/simulacion/run', {});
   return data;
 }

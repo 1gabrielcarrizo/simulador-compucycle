@@ -62,6 +62,10 @@ function simularJornada(dia, offsetMinutos, params, tasaReprocesoActiva, rng, es
 
   const programarSeparacion = (desde) => {
     if (estado.wip <= 0) return;
+
+    // NUEVA REGLA: Si la separadora ya está ocupada trabajando, no encolar otra orden
+    if (sepOcupadaHasta > desde) return;
+
     const inicio = Math.max(desde, sepOcupadaHasta);
     const duracion = uniforme(10, 15, rng);
     const pesoExtraido = Math.min(estado.wip, Math.max(50, normal(500, 50, rng)));
@@ -99,9 +103,16 @@ function simularJornada(dia, offsetMinutos, params, tasaReprocesoActiva, rng, es
     tArribo += exponencial(params.tasaLlegadaMin, rng);
   }
 
-  eventos.sort((a, b) => a.tiempo - b.tiempo);
+  // eventos.sort((a, b) => a.tiempo - b.tiempo);
 
-  for (const ev of eventos) {
+  // for (const ev of eventos) {
+  //   if (ev.tiempo > finJornada) break;
+  // REEMPLAZO DEL MOTOR DE EVENTOS
+  while (eventos.length > 0) {
+    // Ordenar dinámicamente para procesar siempre el evento más antiguo
+    eventos.sort((a, b) => a.tiempo - b.tiempo);
+    const ev = eventos.shift(); // Saca el primer evento de la lista
+
     if (ev.tiempo > finJornada) break;
 
     if (ev.tipo === 'fin_trituracion' && ev.lote) {
@@ -241,8 +252,8 @@ function ejecutarSimulacion(input = {}) {
 
   const costosOperativosUsd = Math.round(
     minutosParadaTotal * 125 +
-      iman.calibracionHoras * 450 +
-      (estado.gradoMaxGlobal >= 4 ? 3500 : 0),
+    iman.calibracionHoras * 450 +
+    (estado.gradoMaxGlobal >= 4 ? 3500 : 0),
   );
 
   let decisionFinal;

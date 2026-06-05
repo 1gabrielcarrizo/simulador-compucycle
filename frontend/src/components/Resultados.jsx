@@ -23,7 +23,8 @@ function Resultados({ datos, capacidadLotes = 50 }) {
   }
 
   const t = datos.totales;
-  const lotesMax = kgALotes(t.wipMaximoGlobal);
+  // const lotesMax = kgALotes(t.wipMaximoGlobal);
+  const lotesMax = kgALotes(t.wipPromedioGlobal);
   const lotesActuales = Math.min(capacidadLotes, Math.round(lotesMax));
   const saturacionPct = Math.min(100, (lotesActuales / capacidadLotes) * 100);
   const limiteLotes = Math.round(capacidadLotes * 0.8);

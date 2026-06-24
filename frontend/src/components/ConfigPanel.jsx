@@ -1,32 +1,35 @@
 import { useState } from 'react';
 import { Clock, Weight, Cog, Magnet, Recycle, Play, Shuffle, Info } from 'lucide-react';
 
+// 1. Ahora arrancan vacíos ('') en lugar de tener números fijos
 export const VALORES_INICIALES = {
-  intervaloLlegadaMin: 15,
-  pesoLoteKg: 500,
-  tiempoTrituracionMin: 8,
-  tiempoSeparacionMin: 12,
-  tasaReprocesoPct: 10,
+  intervaloLlegadaMin: '',
+  pesoLoteKg: '',
+  tiempoTrituracionMin: '',
+  tiempoSeparacionMin: '',
+  tasaReprocesoPct: '',
 };
 
+// 2. Agregamos la propiedad 'placeholder' a cada campo
 const CAMPOS = [
-  { key: 'intervaloLlegadaMin', label: 'Tiempo entre llegadas (min)', icon: Clock, min: 1, max: 120, step: 1 },
-  { key: 'pesoLoteKg', label: 'Peso exacto del lote (kg)', icon: Weight, min: 50, max: 2000, step: 10 },
-  { key: 'tiempoTrituracionMin', label: 'Tiempo de Trituración (min)', icon: Cog, min: 1, max: 30, step: 0.5 },
-  { key: 'tiempoSeparacionMin', label: 'Tiempo de Separación (min)', icon: Magnet, min: 1, max: 30, step: 0.5 },
-  { key: 'tasaReprocesoPct', label: 'Tasa de Reproceso (%)', icon: Recycle, min: 0, max: 100, step: 1, suffix: '%' },
+  { key: 'intervaloLlegadaMin', label: 'Tiempo entre llegadas (min)', icon: Clock, min: 1, max: 120, step: 1, placeholder: 'Ej: 15' },
+  { key: 'pesoLoteKg', label: 'Peso exacto del lote (kg)', icon: Weight, min: 50, max: 2000, step: 10, placeholder: 'Ej: 500' },
+  { key: 'tiempoTrituracionMin', label: 'Tiempo de Trituración (min)', icon: Cog, min: 1, max: 30, step: 0.5, placeholder: 'Ej: 8' },
+  { key: 'tiempoSeparacionMin', label: 'Tiempo de Separación (min)', icon: Magnet, min: 1, max: 30, step: 0.5, placeholder: 'Ej: 12' },
+  { key: 'tasaReprocesoPct', label: 'Tasa de Reproceso (%)', icon: Recycle, min: 0, max: 100, step: 1, suffix: '%', placeholder: 'Ej: 10' },
 ];
 
-function validar(valores) {
+const validar = (valores) => {
   for (const c of CAMPOS) {
     const v = Number(valores[c.key]);
+    // Esta validación ya ataja perfectamente si el campo está vacío ('')
     if (valores[c.key] === '' || Number.isNaN(v)) return `Complete el campo: ${c.label}`;
     if (v < c.min || v > c.max) return `${c.label}: valor entre ${c.min} y ${c.max}`;
   }
   return null;
-}
+};
 
-function ConfigPanel({ onAleatorio, onConValores, cargando }) {
+const ConfigPanel = ({ onAleatorio, onConValores, cargando }) => {
   const [valores, setValores] = useState(VALORES_INICIALES);
   const [errorLocal, setErrorLocal] = useState('');
 
@@ -51,12 +54,12 @@ function ConfigPanel({ onAleatorio, onConValores, cargando }) {
   };
 
   return (
-    <section className="scada-card p-4 h-full flex flex-col">
-      <h2 className="scada-section-title">1. Configuración Inicial (Determinística)</h2>
-      <p className="text-xs font-semibold text-scada-blue mb-3">INGRESE LOS VALORES EXACTOS</p>
+    <section className="scada-card p-4 h-full flex flex-col max-h-screen">
+      <h2 className="scada-section-title shrink-0">1. Configuración Inicial (Determinística)</h2>
+      <p className="text-xs font-semibold text-scada-blue mb-3 shrink-0">INGRESE LOS VALORES EXACTOS</p>
 
-      <div className="space-y-3 flex-1">
-        {CAMPOS.map(({ key, label, icon: Icon, min, max, step, suffix }) => (
+      <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar min-h-0">
+        {CAMPOS.map(({ key, label, icon: Icon, min, max, step, suffix, placeholder }) => (
           <div key={key}>
             <label className="flex items-center gap-1.5 text-xs text-slate-600 mb-1 font-medium">
               <Icon size={14} className="text-scada-blue shrink-0" />
@@ -68,10 +71,19 @@ function ConfigPanel({ onAleatorio, onConValores, cargando }) {
                 min={min}
                 max={max}
                 step={step}
+                placeholder={placeholder}
                 value={valores[key]}
                 disabled={cargando}
-                onChange={(e) => set(key, e.target.value)}
-                className="w-full border border-scada-border rounded px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-scada-blue/30 disabled:bg-slate-50"
+                onKeyDown={(e) => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()}
+                onChange={(e) => {
+                  let valor = e.target.value;
+                  // Tope estricto: si supera el máximo, lo clava en el máximo permitido
+                  if (valor !== '' && Number(valor) > max) {
+                    valor = max;
+                  }
+                  set(key, valor);
+                }}
+                className="w-full border border-scada-border rounded px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-scada-blue/30 disabled:bg-slate-50 placeholder:text-slate-300"
               />
               {suffix && (
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">
@@ -97,7 +109,7 @@ function ConfigPanel({ onAleatorio, onConValores, cargando }) {
         </div>
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-4 space-y-2 shrink-0">
         <button
           type="button"
           onClick={handleConValores}
@@ -124,6 +136,6 @@ function ConfigPanel({ onAleatorio, onConValores, cargando }) {
       </div>
     </section>
   );
-}
+};
 
 export default ConfigPanel;

@@ -4,7 +4,7 @@ import PlantMonitor from './components/PlantMonitor.jsx';
 import SemaphorePanel from './components/SemaphorePanel.jsx';
 import EventLogPanel from './components/EventLogPanel.jsx';
 import ReportModal from './components/ReportModal.jsx';
-import { iniciarJornada } from './api/simulacionApi.js';
+import { iniciarJornadaAleatoria, iniciarJornadaConValores } from './api/simulacionApi.js';
 import { usePlayback } from './hooks/usePlayback.js';
 
 function App() {
@@ -13,21 +13,19 @@ function App() {
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
   const [mostrarModal, setMostrarModal] = useState(false);
-
   const { frame, tiempoMin, eventosVisibles, progresoPct } = usePlayback(
     resultado,
     reproduciendo,
   );
 
-  const handleIniciar = async () => {
+  const ejecutar = async (promiseFn) => {
     setCargando(true);
     setReproduciendo(false);
     setResultado(null);
     setError(null);
     setMostrarModal(false);
-
     try {
-      const res = await iniciarJornada();
+      const res = await promiseFn();
       if (res.ok) {
         setResultado(res.resultado);
         setReproduciendo(true);
@@ -46,6 +44,9 @@ function App() {
     }
   };
 
+  const handleAleatorio = () => ejecutar(iniciarJornadaAleatoria);
+  const handleConValores = (valoresFijos) => ejecutar(() => iniciarJornadaConValores(valoresFijos));
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-white border-b border-scada-border px-6 py-3 shadow-sm">
@@ -62,14 +63,21 @@ function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <div className="lg:col-span-3">
-            <ConfigPanel onIniciar={handleIniciar} cargando={cargando || reproduciendo} />
+            <ConfigPanel
+              onAleatorio={handleAleatorio}
+              onConValores={handleConValores}
+              cargando={cargando || reproduciendo}
+            />
           </div>
+
           <div className="lg:col-span-6">
             <PlantMonitor frame={frame} />
           </div>
+
           <div className="lg:col-span-3">
             <SemaphorePanel frame={frame} />
           </div>
+
         </div>
 
         <EventLogPanel
@@ -77,8 +85,8 @@ function App() {
           progresoPct={progresoPct}
           eventos={eventosVisibles}
         />
-      </main>
 
+      </main>
       {mostrarModal && resultado?.reporte && (
         <ReportModal reporte={resultado.reporte} onCerrar={() => setMostrarModal(false)} />
       )}

@@ -59,9 +59,56 @@ function agregarLog(estado, mensaje, tipo, snapshot) {
   });
 }
 
+/** Reparto exacto post-separadora (modo determinístico) */
+function repartirDeterministico(extraido, tasaReprocesoPct) {
+  const tasa = Math.min(100, Math.max(0, tasaReprocesoPct)) / 100;
+  const reprocesoKg = extraido * tasa;
+  const resto = extraido - reprocesoKg;
+  return {
+    reprocesoKg,
+    destruccionKg: resto * (2 / 3),
+    refurbishKg: resto * (1 / 3),
+    destino: reprocesoKg > 0 ? 'reproceso' : 'destruccion',
+  };
+}
+
+function crearContextoSimulacion(input, rng) {
+  const esDet = input.modo === 'deterministico' && input.valoresFijos;
+  const det = input.valoresFijos || {};
+
+  return {
+    esDet,
+    det,
+    interArribo() {
+      return esDet ? Number(det.intervaloLlegadaMin) : exponencial(TASA_LLEGADA_MEDIA, rng);
+    },
+    pesoLote() {
+      return esDet ? Number(det.pesoLoteKg) : Math.max(100, normal(500, 50, rng));
+    },
+    tiempoTrituracion(tipoDisco) {
+      return esDet ? Number(det.tiempoTrituracionMin) : tiempoTrituracion(tipoDisco, rng);
+    },
+    duracionSeparacion() {
+      return esDet ? Number(det.tiempoSeparacionMin) : uniforme(10, 15, rng);
+    },
+    pesoExtraido(wipActual) {
+      if (esDet) return Math.min(wipActual, Number(det.pesoLoteKg));
+      return Math.min(wipActual, Math.max(50, normal(500, 50, rng)));
+    },
+    tipoDisco(idLote) {
+      if (esDet) return idLote % 2 === 1 ? 'HDD' : 'SSD';
+      return muestrearTipoDisco(rng);
+    },
+    tasaReproceso() {
+      return esDet ? Number(det.tasaReprocesoPct) / 100 : TASA_REPROCESO;
+    },
+  };
+}
+
 function ejecutarSimulacion(input = {}) {
   const rng = crearRng(input.seed);
   const iman = CONFIGURACIONES_IMAN.estandar;
+  const ctx = crearContextoSimulacion(input, rng);
 
   const estado = {
     tiempoActual: 0,
@@ -107,8 +154,8 @@ function ejecutarSimulacion(input = {}) {
   const programarSeparacion = (desde) => {
     if (estado.wip <= 0 || sepOcupadaHasta > desde) return;
     const inicio = Math.max(desde, sepOcupadaHasta);
-    const duracion = uniforme(10, 15, rng);
-    const pesoExtraido = Math.min(estado.wip, Math.max(50, normal(500, 50, rng)));
+    const duracion = ctx.duracionSeparacion();
+    const pesoExtraido = ctx.pesoExtraido(estado.wip);
     maquinas.separadora = { estado: 'OCUPADA', loteKg: Math.round(pesoExtraido) };
     eventos.push({ tiempo: inicio + duracion, tipo: 'fin_separacion', pesoExtraido, inicio });
     sepOcupadaHasta = inicio + duracion;
@@ -116,15 +163,16 @@ function ejecutarSimulacion(input = {}) {
 
   programarSeparacion(0);
 
-  let tArribo = exponencial(TASA_LLEGADA_MEDIA, rng);
+  let tArribo = ctx.interArribo();
 
   while (tArribo < JORNADA_MINUTOS) {
-    const tipoDisco = muestrearTipoDisco(rng);
+    const proximoId = estado.idLote + 1;
+    const tipoDisco = ctx.tipoDisco(proximoId);
     if (tipoDisco === 'HDD') estado.countHDD += 1;
     else estado.countSSD += 1;
 
-    const peso = Math.max(100, normal(500, 50, rng));
-    const durTrit = tiempoTrituracion(tipoDisco, rng);
+    const peso = ctx.pesoLote();
+    const durTrit = ctx.tiempoTrituracion(tipoDisco);
     const tFinTrit = tArribo + durTrit;
 
     const lote = {
@@ -137,7 +185,7 @@ function ejecutarSimulacion(input = {}) {
 
     maquinas.trituradora = { estado: 'OCUPADA', loteKg: Math.round(peso) };
     eventos.push({ tiempo: tFinTrit, tipo: 'fin_trituracion', lote });
-    tArribo += exponencial(TASA_LLEGADA_MEDIA, rng);
+    tArribo += ctx.interArribo();
   }
 
   while (eventos.length > 0) {
@@ -171,19 +219,36 @@ function ejecutarSimulacion(input = {}) {
 
       if (extraido > 0) {
         estado.wip -= extraido;
-        const destino = muestrearDestino(TASA_REPROCESO, rng);
+        let destino;
         let reprocesoKg = 0;
 
-        if (destino === 'reproceso') {
-          reprocesoKg = extraido;
-          estado.wip += reprocesoKg;
-          estado.kgReproceso += reprocesoKg;
-          estado.ciclosReproceso += 1;
-          estado.reprocesoActivo = true;
+        if (ctx.esDet) {
+          const reparto = repartirDeterministico(extraido, ctx.det.tasaReprocesoPct);
+          reprocesoKg = reparto.reprocesoKg;
+          destino = reparto.destino;
+          estado.kgDestruccion += reparto.destruccionKg;
+          estado.kgRefurbish += reparto.refurbishKg;
+          if (reprocesoKg > 0) {
+            estado.wip += reprocesoKg;
+            estado.kgReproceso += reprocesoKg;
+            estado.ciclosReproceso += 1;
+            estado.reprocesoActivo = true;
+          } else {
+            estado.reprocesoActivo = false;
+          }
         } else {
-          estado.reprocesoActivo = false;
-          if (destino === 'destruccion') estado.kgDestruccion += extraido;
-          else estado.kgRefurbish += extraido;
+          destino = muestrearDestino(TASA_REPROCESO, rng);
+          if (destino === 'reproceso') {
+            reprocesoKg = extraido;
+            estado.wip += reprocesoKg;
+            estado.kgReproceso += reprocesoKg;
+            estado.ciclosReproceso += 1;
+            estado.reprocesoActivo = true;
+          } else {
+            estado.reprocesoActivo = false;
+            if (destino === 'destruccion') estado.kgDestruccion += extraido;
+            else estado.kgRefurbish += extraido;
+          }
         }
 
         maquinas.separadora = { estado: 'LIBRE', loteKg: 0 };
@@ -241,19 +306,30 @@ function ejecutarSimulacion(input = {}) {
 
   const estadoFinal = crearSnapshot(estado, maquinas);
 
+  const configuracion = ctx.esDet
+    ? {
+        modo: 'deterministico',
+        iman: iman.nombre,
+        jornadaMinutos: JORNADA_MINUTOS,
+        capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
+        valoresFijos: { ...ctx.det },
+      }
+    : {
+        modo: 'aleatorio',
+        iman: iman.nombre,
+        tasaLlegadaMediaMin: TASA_LLEGADA_MEDIA,
+        distribucionLlegada: 'Exponencial',
+        pesoLoteMediaKg: 500,
+        pesoLoteDesvioKg: 50,
+        distribucionPeso: 'Normal',
+        jornadaMinutos: JORNADA_MINUTOS,
+        capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
+        tasaReproceso: TASA_REPROCESO,
+        clasificacion: 'Binomial encadenada (60% destrucción / 30% refurbish / 10% reproceso)',
+      };
+
   return {
-    configuracion: {
-      iman: iman.nombre,
-      tasaLlegadaMediaMin: TASA_LLEGADA_MEDIA,
-      distribucionLlegada: 'Exponencial',
-      pesoLoteMediaKg: 500,
-      pesoLoteDesvioKg: 50,
-      distribucionPeso: 'Normal',
-      jornadaMinutos: JORNADA_MINUTOS,
-      capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
-      tasaReproceso: TASA_REPROCESO,
-      clasificacion: 'Binomial encadenada (60% destrucción / 30% refurbish / 10% reproceso)',
-    },
+    configuracion,
     logEventos: estado.logEventos,
     serieWip: estado.serieWip,
     porLote: estado.porLote,

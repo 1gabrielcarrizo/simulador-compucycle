@@ -2,9 +2,36 @@ const { response } = require('express');
 const Simulacion = require('../models/Simulacion');
 const { ejecutarSimulacion } = require('../helpers/simulador');
 
+const CAMPOS_FIJOS = [
+  'intervaloLlegadaMin',
+  'pesoLoteKg',
+  'tiempoTrituracionMin',
+  'tiempoSeparacionMin',
+  'tasaReprocesoPct',
+];
+
 const runSimulacion = async (req, res = response) => {
   try {
-    const resultado = ejecutarSimulacion({ seed: req.body?.seed });
+    const body = req.body || {};
+    const modo = body.modo === 'deterministico' ? 'deterministico' : 'aleatorio';
+
+    if (modo === 'deterministico') {
+      const vf = body.valoresFijos || {};
+      for (const campo of CAMPOS_FIJOS) {
+        if (vf[campo] == null || Number.isNaN(Number(vf[campo]))) {
+          return res.status(400).json({
+            ok: false,
+            msg: `Modo determinístico requiere "${campo}" numérico en valoresFijos`,
+          });
+        }
+      }
+    }
+
+    const resultado = ejecutarSimulacion({
+      modo,
+      seed: body.seed,
+      valoresFijos: body.valoresFijos,
+    });
 
     if (process.env.DB_CNN) {
       try {

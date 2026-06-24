@@ -7,7 +7,17 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-export async function iniciarJornada() {
-  const { data } = await api.post('/simulacion/run', {});
+/** Simulación estocástica (distribuciones del modelo) */
+export async function iniciarJornadaAleatoria() {
+  const { data } = await api.post('/simulacion/run', { modo: 'aleatorio' });
+  return data;
+}
+
+/** Simulación con valores fijos ingresados por el usuario */
+export async function iniciarJornadaConValores(valoresFijos) {
+  const { data } = await api.post('/simulacion/run', {
+    modo: 'deterministico',
+    valoresFijos,
+  });
   return data;
 }

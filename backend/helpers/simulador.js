@@ -237,7 +237,7 @@ function ejecutarSimulacion(input = {}) {
             estado.reprocesoActivo = false;
           }
         } else {
-          destino = muestrearDestino(TASA_REPROCESO, rng);
+          destino = muestrearDestino(ctx.tasaReproceso(), rng);
           if (destino === 'reproceso') {
             reprocesoKg = extraido;
             estado.wip += reprocesoKg;
@@ -285,12 +285,18 @@ function ejecutarSimulacion(input = {}) {
   const wipPromedio =
     estado.wipMuestras > 0 ? estado.wipAcum / estado.wipMuestras : estado.wip;
   const wipFinal = estado.wip;
-  const tasaReprocesoPct =
-    lotesTotales > 0 ? (estado.ciclosReproceso / estado.ciclosSeparacion) * 100 : 0;
+  let tasaReprocesoPct = lotesTotales > 0 ? (estado.ciclosReproceso / Math.max(1, estado.ciclosSeparacion)) * 100 : 0;
   const pctHDD = lotesTotales > 0 ? (estado.countHDD / lotesTotales) * 100 : 0;
   const pctSSD = lotesTotales > 0 ? (estado.countSSD / lotesTotales) * 100 : 0;
-  const minutosReproceso = Math.round((estado.ciclosReproceso / Math.max(1, estado.ciclosSeparacion)) * JORNADA_MINUTOS);
-  const pctTiempoReproceso = Math.round((minutosReproceso / JORNADA_MINUTOS) * 100);
+
+  let pctTiempoReproceso = Math.round((estado.ciclosReproceso / Math.max(1, estado.ciclosSeparacion)) * 100);
+
+  if (ctx.esDet) {
+    tasaReprocesoPct = Number(ctx.det.tasaReprocesoPct);
+    pctTiempoReproceso = Number(ctx.det.tasaReprocesoPct);
+  }
+
+  const minutosReproceso = Math.round((pctTiempoReproceso / 100) * JORNADA_MINUTOS);
 
   const requiereUpgrade = wipPromedio >= 2000;
   let decision;
@@ -304,29 +310,32 @@ function ejecutarSimulacion(input = {}) {
     recomendacion = 'Operación estable. Mantener rodillo estándar y gestión manual del flujo.';
   }
 
+  estado.reprocesoActivo = false;
+  maquinas.trituradora = { estado: 'LIBRE', loteKg: 0 };
+  maquinas.separadora = { estado: 'LIBRE', loteKg: 0 };
   const estadoFinal = crearSnapshot(estado, maquinas);
 
   const configuracion = ctx.esDet
     ? {
-        modo: 'deterministico',
-        iman: iman.nombre,
-        jornadaMinutos: JORNADA_MINUTOS,
-        capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
-        valoresFijos: { ...ctx.det },
-      }
+      modo: 'deterministico',
+      iman: iman.nombre,
+      jornadaMinutos: JORNADA_MINUTOS,
+      capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
+      valoresFijos: { ...ctx.det },
+    }
     : {
-        modo: 'aleatorio',
-        iman: iman.nombre,
-        tasaLlegadaMediaMin: TASA_LLEGADA_MEDIA,
-        distribucionLlegada: 'Exponencial',
-        pesoLoteMediaKg: 500,
-        pesoLoteDesvioKg: 50,
-        distribucionPeso: 'Normal',
-        jornadaMinutos: JORNADA_MINUTOS,
-        capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
-        tasaReproceso: TASA_REPROCESO,
-        clasificacion: 'Binomial encadenada (60% destrucción / 30% refurbish / 10% reproceso)',
-      };
+      modo: 'aleatorio',
+      iman: iman.nombre,
+      tasaLlegadaMediaMin: TASA_LLEGADA_MEDIA,
+      distribucionLlegada: 'Exponencial',
+      pesoLoteMediaKg: 500,
+      pesoLoteDesvioKg: 50,
+      distribucionPeso: 'Normal',
+      jornadaMinutos: JORNADA_MINUTOS,
+      capacidadTolvaKg: CAPACIDAD_TOLVA_KG,
+      tasaReproceso: TASA_REPROCESO,
+      clasificacion: 'Binomial encadenada (60% destrucción / 30% refurbish / 10% reproceso)',
+    };
 
   return {
     configuracion,

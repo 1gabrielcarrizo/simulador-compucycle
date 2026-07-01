@@ -184,7 +184,17 @@ function ejecutarSimulacion(input = {}) {
     };
 
     maquinas.trituradora = { estado: 'OCUPADA', loteKg: Math.round(peso) };
+
+    const snap = crearSnapshot(estado, maquinas);
+    agregarLog(
+      estado,
+      `Trituradora comenzó a procesar el lote ${lote.id}`,
+      'inicio_trituracion',
+      snap
+    );
+
     eventos.push({ tiempo: tFinTrit, tipo: 'fin_trituracion', lote });
+
     tArribo += ctx.interArribo();
   }
 
